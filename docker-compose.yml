@@ -1,0 +1,333 @@
+services:
+
+# MILVUS
+
+  etcd:
+    container_name: milvus-etcd
+    image: quay.io/coreos/etcd:v3.5.5
+    environment:
+      - ETCD_AUTO_COMPACTION_MODE=revision
+      - ETCD_AUTO_COMPACTION_RETENTION=1000
+      - ETCD_QUOTA_BACKEND_BYTES=4294967296
+      - ETCD_SNAPSHOT_COUNT=50000
+    volumes:
+      - ${DOCKER_VOLUME_DIRECTORY:-.}/volumes/etcd:/etcd
+    command: etcd -advertise-client-urls=http://127.0.0.1:2379 -listen-client-urls http://0.0.0.0:2379 --data-dir /etcd
+    healthcheck:
+      test: ["CMD", "etcdctl", "endpoint", "health"]
+      interval: 30s
+      timeout: 20s
+      retries: 3
+
+  minio:
+    container_name: milvus-minio
+    image: minio/minio:RELEASE.2023-03-20T20-16-18Z
+    environment:
+      MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY}
+      MINIO_SECRET_KEY: ${MINIO_SECRET_KEY}
+    ports:
+      - "9001:9001"
+      - "9000:9000"
+    volumes:
+      - ${DOCKER_VOLUME_DIRECTORY:-.}/volumes/minio:/minio_data
+    command: minio server /minio_data --console-address ":9001"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 30s
+      timeout: 20s
+      retries: 3
+
+  standalone:
+    container_name: milvus-standalone
+    image: milvusdb/milvus:v2.4.13-hotfix
+    command: ["milvus", "run", "standalone"]
+    security_opt:
+    - seccomp:unconfined
+    environment:
+      ETCD_ENDPOINTS: etcd:2379
+      MINIO_ADDRESS: minio:9000
+    volumes:
+      - ${DOCKER_VOLUME_DIRECTORY:-.}/volumes/milvus:/var/lib/milvus
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9091/healthz"]
+      interval: 30s
+      start_period: 90s
+      timeout: 20s
+      retries: 3
+    ports:
+      - "19530:19530"
+      - "9091:9091"
+    depends_on:
+      - "etcd"
+      - "minio"
+
+  attu:
+    container_name: attu
+    image: zilliz/attu:v2.4.9
+    security_opt:
+    - seccomp:unconfined
+    environment:
+      MILVUS_URL: standalone:19530 
+    ports:
+      - "3000:3000"
+    depends_on:
+      - "etcd"
+      - "minio"
+      - "standalone"
+
+  database:
+    image: postgres:15.2-alpine
+    restart: always
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=prefect
+    expose:
+      - 5432
+    volumes: 
+      - db:/var/lib/postgresql/data
+
+  server:
+    image: prefecthq/prefect:2.20-python3.11
+    restart: always
+    volumes:
+      - prefect:/root/.prefect
+    entrypoint: ["/opt/prefect/entrypoint.sh", "prefect", "server", "start"]
+    environment:
+      - PREFECT_UI_URL=${PREFECT_UI_URL}
+      - PREFECT_API_URL=${PREFECT_API_URL}
+      - PREFECT_SERVER_API_HOST=${PREFECT_SERVER_API_HOST}
+      - PREFECT_API_DATABASE_CONNECTION_URL=${PREFECT_API_DATABASE_CONNECTION_URL}
+    ports:
+      - 4200:4200
+    depends_on:
+      - database
+      - minio
+
+# OPENSEARCH
+
+  os01:
+    restart: always
+    image: telicent/opensearch:2.11.1.0
+    environment:
+      OPENSEARCH_JAVA_OPTS: ${OPENSEARCH_JAVA_OPTS_OS01}
+      node.name: ${NODE_NAME_OS01}
+      discovery.seed_hosts: ${DISCOVERY_SEED_HOSTS_OS01}
+      cluster.initial_master_nodes: ${CLUSTER_INITIAL_MASTER_NODE_OS01}
+      plugins.security.ssl.transport.pemkey_filepath: ${PLUGINS_SECURITY_SSL_TRANSPORT_PEMKEY_FILEPATH_OS01}
+      plugins.security.ssl.transport.pemcert_filepath: ${PLUGINS_SECURITY_SSL_TRANSPORT_PEMCERT_FILEPATH_OS01}
+      plugins.security.ssl.http.pemkey_filepath: ${PLUGINS_SECURITY_SSL_HTTP_PEMKEY_FILEPATH_OS01}
+      plugins.security.ssl.http.pemcert_filepath: ${PLUGINS_SECURITY_SSL_HTTP_PEMCERT_FILEPATH_OS01}
+      DISABLE_INSTALL_DEMO_CONFIG: ${DISABLE_INSTALL_DEMO_CONFIG_OS01}
+      JAVA_HOME: ${JAVA_HOME_OS01}
+      bootstrap.memory_lock: ${BOOTSTRAP_MEMORY_LOCK_OS01}
+      network.host: ${NETWORK_HOST_OS01}
+    ulimits: 
+      memlock:
+        soft: -1
+        hard: -1
+    volumes:
+      - "./opensearch.yml:/usr/share/opensearch/config/opensearch.yml"
+      - "os-data1:/usr/share/opensearch/data"
+      - "./certs:/usr/share/opensearch/config/certificates:ro"
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "100m"
+        max-file: "1"
+    ports:
+      - 9200:9200
+      - 9600:9600
+  
+  os02:
+    restart: always
+    image: telicent/opensearch:2.11.1.0
+    environment:
+      OPENSEARCH_JAVA_OPTS: ${OPENSEARCH_JAVA_OPTS_OS02} 
+      node.name: ${NODE_NAME_OS02}
+      discovery.seed_hosts: ${DISCOVERY_SEED_HOSTS_OS02}
+      cluster.initial_master_nodes: ${CLUSTER_INITIAL_MASTER_NODE_OS02}
+      plugins.security.ssl.transport.pemkey_filepath: ${PLUGINS_SECURITY_SSL_TRANSPORT_PEMKEY_FILEPATH_OS02} 
+      plugins.security.ssl.transport.pemcert_filepath: ${PLUGINS_SECURITY_SSL_TRANSPORT_PEMCERT_FILEPATH_OS02}
+      plugins.security.ssl.http.pemkey_filepath: ${PLUGINS_SECURITY_SSL_HTTP_PEMKEY_FILEPATH_OS02}
+      plugins.security.ssl.http.pemcert_filepath: ${PLUGINS_SECURITY_SSL_HTTP_PEMCERT_FILEPATH_OS02}
+      DISABLE_INSTALL_DEMO_CONFIG: ${DISABLE_INSTALL_DEMO_CONFIG_OS02}
+      JAVA_HOME: ${JAVA_HOME_OS02}
+      bootstrap.memory_lock: ${BOOTSTRAP_MEMORY_LOCK_OS02} 
+      network.host: ${NETWORK_HOST_OS02}
+    ulimits: 
+      memlock:
+        soft: -1
+        hard: -1
+        
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "100m"
+        max-file: "1"
+    volumes:
+      - "./opensearch.yml:/usr/share/opensearch/config/opensearch.yml"
+      - "os-data2:/usr/share/opensearch/data"
+      - "./certs:/usr/share/opensearch/config/certificates:ro"
+  
+  os03:
+    restart: always
+    image: telicent/opensearch:2.11.1.0
+    environment:
+      OPENSEARCH_JAVA_OPTS: ${OPENSEARCH_JAVA_OPTS_OS03}
+      node.name: ${NODE_NAME_OS03}
+      discovery.seed_hosts: ${DISCOVERY_SEED_HOSTS_OS03}
+      cluster.initial_master_nodes: ${CLUSTER_INITIAL_MASTER_NODE_OS03}
+      plugins.security.ssl.transport.pemkey_filepath: ${PLUGINS_SECURITY_SSL_TRANSPORT_PEMKEY_FILEPATH_OS03}
+      plugins.security.ssl.transport.pemcert_filepath: ${PLUGINS_SECURITY_SSL_TRANSPORT_PEMCERT_FILEPATH_OS03}
+      plugins.security.ssl.http.pemkey_filepath: ${PLUGINS_SECURITY_SSL_HTTP_PEMKEY_FILEPATH_OS03}
+      plugins.security.ssl.http.pemcert_filepath: ${PLUGINS_SECURITY_SSL_HTTP_PEMCERT_FILEPATH_OS03}
+      DISABLE_INSTALL_DEMO_CONFIG: ${DISABLE_INSTALL_DEMO_CONFIG_OS03}
+      JAVA_HOME: ${JAVA_HOME_OS03}
+      bootstrap.memory_lock: ${BOOTSTRAP_MEMORY_LOCK_OS03}
+      network.host: ${NETWORK_HOST_OS03}
+    ulimits: 
+      memlock:
+        soft: -1
+        hard: -1
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "100m"
+        max-file: "1"
+    volumes:
+      - "./opensearch.yml:/usr/share/opensearch/config/opensearch.yml"
+      - "os-data3:/usr/share/opensearch/data"
+      - "./certs:/usr/share/opensearch/config/certificates:ro"
+
+  kibana:
+    restart: always
+    image: opensearchproject/opensearch-dashboards:2.11.1
+    environment:
+      OPENSEARCH_HOSTS: '["https://os01:9200","https://os02:9200","https://os03:9200"]'
+      DISABLE_INSTALL_DEMO_CONFIG: ${DISABLE_INSTALL_DEMO_CONFIG_KIBANA}
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "100m"
+        max-file: "1"
+    volumes:
+      - "./certs:/usr/share/opensearch-dashboards/config/certificates:ro"
+      - "./opensearch-dashboards.yml:/usr/share/opensearch-dashboards/config/opensearch_dashboards.yml"
+    ports:
+      - 5601:5601
+
+# BACKEND
+
+  kserve-deploy:
+    build:
+      context: ./ml/kserve-deploy
+      dockerfile: Dockerfile
+    ports:
+      - 8100:8100
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+
+  indexer:
+    build:
+      context: ./backend/indexer
+      dockerfile: Dockerfile
+    environment:
+      CLUSTER: ${CLUSTER}
+      EMBEDDERS_ENDPOINT: ${EMBEDDERS_ENDPOINT}
+      PREFECT_API_URL: ${PREFECT_API_URL_INDEXER}
+      INDEXER_S3_BUCKET: ${INDEXER_S3_BUCKET}
+      INDEXER_S3_ACCESS_KEY: ${INDEXER_S3_ACCESS_KEY}
+      INDEXER_S3_SECRET_KEY: ${INDEXER_S3_SECRET_KEY}
+      INDEXER_S3_ENDPOINT: ${INDEXER_S3_ENDPOINT}
+      CHUNK_SIZE: ${CHUNK_SIZE}
+      CHUNK_OVERLAP: ${CHUNK_OVERLAP}
+      MILVUS_ENDPOINT: "http://standalone:19530"
+      OPENSEARCH_HOST: ${OPENSEARCH_HOST}
+      OPENSEARCH_PORT: ${OPENSEARCH_PORT}
+      OPENSEARCH_USERNAME: ${OPENSEARCH_USERNAME}
+      OPENSEARCH_PASSWORD: ${OPENSEARCH_PASSWORD}
+    depends_on:
+      - kserve-deploy
+
+  search-api:
+    build:
+      context: ./backend/search-api
+      dockerfile: Dockerfile
+    environment:
+      CLUSTER: ${CLUSTER_SEARCH_API}
+      HOST: ${HOST_SEARCH_API}
+      PORT: ${PORT_SEARCH_API}
+      WORKERS: ${WORKERS_SEARCH_API}
+      EMBEDDERS_ENDPOINT: ${EMBEDDERS_ENDPOINT}
+      RERANKER_ENDPOINT: ${RERANKER_ENDPOINT}
+      RERANKER_MODEL_NAME: ${RERANKER_MODEL_NAME}
+      RERANKER_TOP_N: ${RERANKER_TOP_N}
+      MILVUS_ENDPOINT: ${MILVUS_ENDPOINT}
+      MILVUS_RETRIEVER_TOP_K: ${MILVUS_RETRIEVER_TOP_K}
+      OPENSEARCH_HOST: ${OPENSEARCH_HOST}
+      OPENSEARCH_PORT: ${OPENSEARCH_PORT}
+      OPENSEARCH_USERNAME: ${OPENSEARCH_USERNAME}
+      OPENSEARCH_PASSWORD: ${OPENSEARCH_PASSWORD}
+      OPENAI_KEY: ${OPENAI_KEY}
+      PROXY_URL: ${PROXY_URL}
+      OPENAI_AGENT_MODEL: ${OPENAI_AGENT_MODEL}
+      INDEXER_S3_BUCKET: ${INDEXER_S3_BUCKET}
+      INDEXER_S3_ACCESS_KEY: ${INDEXER_S3_ACCESS_KEY}
+      INDEXER_S3_SECRET_KEY: ${INDEXER_S3_SECRET_KEY}
+      INDEXER_S3_ENDPOINT: ${INDEXER_S3_ENDPOINT}
+      GIGACHAT_CREDENTIALS: ${GIGACHAT_CREDENTIALS}
+
+
+    ports:
+      - 8200:8200
+    depends_on:
+      - kserve-deploy
+
+  search-gradio:
+    build:
+      context: ./frontend/search-gradio
+      dockerfile: Dockerfile
+    environment:
+      API_URL: ${API_URL_SEARCH_API}
+    ports:
+      - 10200:10200
+    depends_on:
+      - search-api
+  
+  chat-agent-gradio:
+    build:
+      context: ./frontend/chat-agent-gradio
+      dockerfile: Dockerfile
+    environment:
+      API_URL: ${API_URL_SEARCH_API}
+    ports:
+      - 10300:10300
+    depends_on:
+      - search-api
+  
+  telegram-bot:
+    build:
+      context: ./frontend/telegram-bot
+      dockerfile: Dockerfile
+    environment:
+      API_URL: ${API_URL_SEARCH_API}
+      INDEXER_S3_BUCKET: ${INDEXER_S3_BUCKET}
+      INDEXER_S3_ACCESS_KEY: ${INDEXER_S3_ACCESS_KEY}
+      INDEXER_S3_SECRET_KEY: ${INDEXER_S3_SECRET_KEY}
+      INDEXER_S3_ENDPOINT: ${INDEXER_S3_ENDPOINT}
+      BOT_TOKEN: ${BOT_TOKEN}
+    depends_on:
+      - search-api
+  
+volumes:
+  os-data1:
+  os-data2:
+  os-data3:
+  db:
+  prefect:
