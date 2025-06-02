@@ -1,5 +1,19 @@
 # RAG_Profagro
 
+## 🛠️ Основной стек проекта
+
+![Python](https://img.shields.io/badge/-Python_3.10+-090909?style=for-the-badge&logo=python)
+![FastAPI](https://img.shields.io/badge/-FastAPI-090909?style=for-the-badge&logo=fastapi)
+![Gradio](https://img.shields.io/badge/-Gradio-090909?style=for-the-badge&logo=gradio)
+![Aiogram](https://img.shields.io/badge/-Aiogram-090909?style=for-the-badge&logo=telegram)
+![OpenSearch](https://img.shields.io/badge/-OpenSearch-090909?style=for-the-badge&logo=opensearch)
+![Milvus](https://img.shields.io/badge/-Milvus-090909?style=for-the-badge&logo=milvus)
+![Prefect](https://img.shields.io/badge/-Prefect-090909?style=for-the-badge&logo=prefect)
+![Docker](https://img.shields.io/badge/-Docker-090909?style=for-the-badge&logo=docker)
+![KServe](https://img.shields.io/badge/-KServe-090909?style=for-the-badge&logo=kubernetes)
+![vLLM](https://img.shields.io/badge/-vLLM-090909?style=for-the-badge&logo=cloudsmith)
+![Cloud.ru S3](https://img.shields.io/badge/-Cloud.ru_S3-090909?style=for-the-badge&logo=amazon-aws)
+
 ## Описание
 
 Данный проект реализован по заказу агрохолдинга ООО «ПрофАгро» и посвящён промышленному внедрению мультимодального LLM-ассистента, использующего Retrieval-Augmented Generation (RAG) для автоматизации калибровки центробежных разбрасывателей удобрений. Цель — построение воспроизводимого производственного пайплайна, обеспечивающего механизатору мгновенный доступ к инструкциям, фото-схемам и видеогайдам AMAZONE и Kverneland, минимизируя ошибки дозирования и человеческий фактор, а также максимизируя соответствие работ картам заданий.
