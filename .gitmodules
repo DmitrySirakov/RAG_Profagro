@@ -1,9 +1,12 @@
 [submodule "backend"]
 	path = backend
 	url = git@github.com:DmitrySirakov/Backend_Profagro.git
+	branch = main
 [submodule "frontend"]
 	path = frontend
 	url = git@github.com:DmitrySirakov/Frontend_Profagro.git
+	branch = main
 [submodule "ml"]
 	path = ml
 	url = git@github.com:DmitrySirakov/ML_Profagro.git
+	branch = main
