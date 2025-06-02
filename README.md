@@ -14,7 +14,7 @@
 ![vLLM](https://img.shields.io/badge/-vLLM-090909?style=for-the-badge&logo=cloudsmith)
 ![Cloud.ru S3](https://img.shields.io/badge/-Cloud.ru_S3-090909?style=for-the-badge&logo=amazon-aws)
 
-[Документация проекта на DeepWiki](https://deepwiki.com/DmitrySirakov/ML_Profagro)
+[Документация проекта на DeepWiki](https://deepwiki.com/DmitrySirakov/RAG_Profagro)
 
 ## Описание
 
